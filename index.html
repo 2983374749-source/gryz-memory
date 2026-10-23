@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f7f4ee">
+  <title>广饶一中琐记 · 校园回忆共创</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#"><span class="brand-mark">琐</span><span>广饶一中琐记<small>校园回忆共创计划</small></span></a>
+    <nav><a href="#stories">阅读回忆</a><a href="#contribute">写下回忆</a><a href="#about">关于项目</a></nav>
+  </header>
+  <main>
+    <section class="hero">
+      <p class="eyebrow">G R A N D  M E M O R I E S</p>
+      <h1>那些年，<br><em>我们一起经历过的日常。</em></h1>
+      <p class="hero-copy">一段课堂里的小插曲，一场难忘的运动会，一位想再说声谢谢的老师。<br>把个人记忆写下来，让共同的校园岁月有迹可循。</p>
+      <div class="hero-actions"><a class="button primary" href="#stories">开始阅读 <span>↘</span></a><a class="text-link" href="#contribute">我也有故事要写 →</a></div>
+      <div class="hero-note"><span class="dot"></span> 每一段回忆，都值得被认真保存。</div>
+    </section>
+    <section class="section" id="stories">
+      <div class="section-heading"><div><p class="eyebrow">THE ARCHIVE</p><h2>回忆集</h2></div><span id="story-count" class="count">示例文章</span></div>
+      <div class="search-wrap"><span>⌕</span><input id="search" type="search" placeholder="搜索故事、地点或关键词…" aria-label="搜索故事"></div>
+      <div id="story-list" class="story-grid">
+        <article class="story-card featured"><div class="story-meta"><span>校园日常</span><span>示例内容</span></div><h3>把这里留给真正发生过的故事</h3><p>这是一篇示例卡片。连接内容数据库并添加真实投稿后，文章会在这里展示。你可以从一间教室、一条走廊或一次普通的课间开始写起。</p><div class="story-footer"><span>匿名作者</span><span>阅读示例 ↗</span></div></article>
+        <article class="story-card"><div class="story-meta"><span>师生记忆</span><span>写作提示</span></div><h3>有没有一句话，你至今还记得？</h3><p>可以写老师的一句鼓励、同学的一次帮助，或者毕业时才意识到的小事。不必写得宏大，真诚就好。</p><div class="story-footer"><span>编辑部</span><span>写作灵感</span></div></article>
+        <article class="story-card"><div class="story-meta"><span>校园风景</span><span>写作提示</span></div><h3>如果闭上眼，你最先想起校园的哪里？</h3><p>操场、食堂、教学楼、放学路上的晚霞……用具体的细节，把一个地方重新带回眼前。</p><div class="story-footer"><span>编辑部</span><span>写作灵感</span></div></article>
+      </div>
+      <p id="empty-state" class="empty hidden">没有找到相关内容。试试其他关键词，或成为第一个写下这段回忆的人。</p>
+    </section>
+    <section class="contribute-section" id="contribute">
+      <div class="contribute-intro"><p class="eyebrow">YOUR STORY MATTERS</p><h2>把你的那一页，<br><em>也写进来。</em></h2><p>不需要会写 Markdown，也不用注册 GitHub。像使用普通文字编辑器一样写下故事，选择如何署名，然后提交。</p><div class="privacy-note"><span>◌</span><div><strong>署名由你决定</strong><p>默认不公开姓名。你可以使用笔名或选择匿名；请不要写入他人的电话、住址等私人信息。</p></div></div></div>
+      <form id="story-form" class="editor-card">
+        <div class="form-top"><span class="editor-label">新建回忆</span><span class="draft-status" id="draft-status">尚未提交</span></div>
+        <label for="title">给这段回忆起个标题 <b>*</b></label>
+        <input id="title" name="title" maxlength="100" placeholder="例如：那年运动会的最后一棒" required>
+        <div class="field-row"><div><label for="category">故事分类</label><select id="category" name="category"><option>校园日常</option><option>师生记忆</option><option>同学情谊</option><option>社团与活动</option><option>校园风景</option><option>其他</option></select></div><div><label for="byline">公开署名</label><select id="byline" name="byline"><option value="匿名">匿名</option><option value="penname">使用笔名</option><option value="realname">公开真实姓名</option></select></div></div>
+        <div id="penname-wrap" class="hidden"><label for="penname">笔名</label><input id="penname" name="penname" maxlength="40" placeholder="填写你希望展示的名字"></div>
+        <div id="realname-wrap" class="hidden"><label for="realname">真实姓名（将公开展示）</label><input id="realname" name="realname" maxlength="40" placeholder="仅在你明确选择公开时填写"></div>
+        <label>正文 <b>*</b></label>
+        <div class="toolbar" role="toolbar" aria-label="文字格式工具">
+          <button type="button" data-cmd="bold" title="加粗"><strong>B</strong></button>
+          <button type="button" data-cmd="italic" title="斜体"><em>I</em></button>
+          <button type="button" data-cmd="insertUnorderedList" title="项目符号">• 列表</button>
+          <button type="button" data-cmd="formatBlock" data-value="blockquote" title="引用">“ 引用</button>
+          <span class="toolbar-hint">像 Word 一样直接输入</span>
+        </div>
+        <div id="body-editor" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="回忆正文" data-placeholder="从一个具体的场景开始写吧……&#10;&#10;那天是什么时候？你在哪里？谁在场？有什么细节让你一直记得？"></div>
+        <label for="tags">关键词（选填）</label><input id="tags" name="tags" maxlength="120" placeholder="例如：高三、运动会、操场，用逗号分隔">
+        <label for="contact">联系邮箱（选填，不会公开）</label><input id="contact" name="contact" type="email" maxlength="150" placeholder="仅用于必要的投稿沟通">
+        <label class="consent"><input type="checkbox" id="consent" required><span>我确认有权提交这些文字和图片；内容不侵犯他人隐私或版权，并同意按本网站说明公开发布。 <b>*</b></span></label>
+        <p class="form-disclaimer">当前是前端演示版：提交内容只保存在本机浏览器，不会自动同步到其他人的设备。接入数据库后，才会成为真正的在线投稿。</p>
+        <div class="form-actions"><button class="button primary" type="submit">发布这段回忆 <span>↗</span></button><button class="button secondary" type="button" id="preview-btn">预览</button></div>
+        <p id="submit-message" class="submit-message" role="status"></p>
+      </form>
+    </section>
+    <section class="section how" id="about"><p class="eyebrow">ABOUT THIS PROJECT</p><h2>这是一本大家共同写的校记。</h2><div class="how-grid"><div><span>01</span><h3>从记忆出发</h3><p>不要求文笔，也没有标准答案。细节、感受和真实经历最重要。</p></div><div><span>02</span><h3>尊重每一个人</h3><p>涉及他人隐私的内容请先征得同意。不要上传未经授权的照片或私人信息。</p></div><div><span>03</span><h3>一起保存</h3><p>网站维护者应提供内容纠错、撤下申请和联系方式，让记忆可持续维护。</p></div></div></section>
+  </main>
+  <footer><span>广饶一中琐记 · 校园回忆共创计划</span><a href="#about">投稿与隐私说明</a><span>用文字保存共同的时间。</span></footer>
+  <dialog id="preview-dialog"><div class="preview-head"><span>文章预览</span><button id="close-preview" aria-label="关闭预览">×</button></div><article id="preview-content" class="preview-content"></article></dialog>
+  <script src="app.js"></script>
+</body>
+</html>
