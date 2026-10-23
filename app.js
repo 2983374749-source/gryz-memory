@@ -1,4 +1,3 @@
-```javascript
 /* 广饶一中琐记：Supabase 共享投稿 */
 const SUPABASE_URL = "https://zdxusouvqwwbrdjysuqa.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_B7Xt3iQFp2xEnxJqAPZu9g_M727c1O9";
@@ -9,56 +8,44 @@ const form = $("story-form");
 const selectByline = $("byline");
 const previewDialog = $("preview-dialog");
 
-if (!window.supabase) {
-  throw new Error("Supabase 客户端未加载，请检查 index.html 中的 CDN 引入。");
+let db = null;
+
+if (window.supabase) {
+  db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+} else {
+  console.warn("Supabase 客户端未加载，页面将以静态模式展示，只能进行前端检查。请确保 CDN 脚本在 app.js 之前加载。 ");
 }
 
-const db = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY
-);
-
-const safeText = (s) =>
-  String(s ?? "").replace(/[&<>"']/g, (c) => ({
+function safeText(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
     '"': "&quot;",
     "'": "&#39;"
-  }[c]));
+  }[char]));
+}
 
 function cleanRichText(html) {
-  const doc = new DOMParser().parseFromString(html, "text/html");
+  const doc = new DOMParser().parseFromString(html || "", "text/html");
 
-  doc.querySelectorAll(
-    "script,style,iframe,object,embed,form,svg,math,link,meta"
-  ).forEach((el) => el.remove());
+  doc.querySelectorAll("script,style,iframe,object,embed,form,svg,math,link,meta").forEach((el) => el.remove());
 
   doc.body.querySelectorAll("*").forEach((el) => {
     [...el.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
-      const value = attr.value.trim();
+      const value = (attr.value || "").trim();
 
-      if (
-        name.startsWith("on") ||
-        name === "style" ||
-        name === "srcdoc"
-      ) {
+      if (name.startsWith("on") || name === "style" || name === "srcdoc") {
         el.removeAttribute(attr.name);
       }
 
-      if (
-        ["href", "src", "xlink:href"].includes(name) &&
-        /^(javascript|data|vbscript):/i.test(value)
-      ) {
+      if (["href", "src", "xlink:href"].includes(name) && /^(javascript|data|vbscript):/i.test(value)) {
         el.removeAttribute(attr.name);
       }
     });
 
-    if (![
-      "P", "BR", "STRONG", "B", "EM", "I", "U",
-      "S", "UL", "OL", "LI", "BLOCKQUOTE", "H2", "H3"
-    ].includes(el.tagName)) {
+    if (!["P", "BR", "STRONG", "B", "EM", "I", "U", "S", "UL", "OL", "LI", "BLOCKQUOTE", "H2", "H3", "SPAN"].includes(el.tagName)) {
       el.replaceWith(...el.childNodes);
     }
   });
@@ -67,7 +54,7 @@ function cleanRichText(html) {
 }
 
 function plainText(html) {
-  const doc = new DOMParser().parseFromString(html, "text/html");
+  const doc = new DOMParser().parseFromString(html || "", "text/html");
   return (doc.body.textContent || "").trim();
 }
 
@@ -83,101 +70,112 @@ function getByline() {
   return "匿名";
 }
 
-selectByline.addEventListener("change", () => {
-  $("penname-wrap").classList.toggle(
-    "hidden",
-    selectByline.value !== "penname"
-  );
+function setBylineVisibility() {
+  const pennameWrap = $("penname-wrap");
+  const realnameWrap = $("realname-wrap");
+  const isPenname = selectByline.value === "penname";
+  const isRealname = selectByline.value === "realname";
 
-  $("realname-wrap").classList.toggle(
-    "hidden",
-    selectByline.value !== "realname"
-  );
-});
+  pennameWrap.classList.toggle("hidden", !isPenname);
+  realnameWrap.classList.toggle("hidden", !isRealname);
+}
 
-document.querySelectorAll(".toolbar button").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    editor.focus();
-
-    const cmd = btn.dataset.cmd;
-
-    if (cmd === "formatBlock") {
-      document.execCommand(cmd, false, btn.dataset.value);
-    } else {
-      document.execCommand(cmd, false, null);
-    }
-  });
-});
-
-$("preview-btn").addEventListener("click", () => {
-  const title = $("title").value.trim() || "未命名的回忆";
-
-  $("preview-content").innerHTML =
-    `<h1>${safeText(title)}</h1>` +
-    `<p class="preview-byline">${safeText($("category").value)} · ` +
-    `${safeText(getByline())}</p>` +
-    `<div class="preview-body">${
-      cleanRichText(editor.innerHTML) ||
-      "<p>正文预览会显示在这里。</p>"
-    }</div>`;
-
-  previewDialog.showModal();
-});
-
-$("close-preview").addEventListener("click", () => {
-  previewDialog.close();
-});
-
-previewDialog.addEventListener("click", (e) => {
-  if (e.target === previewDialog) {
-    previewDialog.close();
-  }
-});
+if (selectByline) {
+  selectByline.addEventListener("change", setBylineVisibility);
+}
 
 function formatDate(value) {
   if (!value) return "";
 
-  const d = new Date(value);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("zh-CN");
+}
 
-  return Number.isNaN(d.getTime())
-    ? ""
-    : d.toLocaleDateString("zh-CN");
+function setSubmitMessage(message, type = "") {
+  const msg = $("submit-message");
+  if (!msg) return;
+  msg.textContent = message;
+  msg.classList.remove("success", "error");
+  if (type) msg.classList.add(type);
+}
+
+function updateStoryCount(count) {
+  const visibleCount = $("story-count");
+  const badgeCount = $("story-count-badge");
+  const text = `${count} 篇回忆`;
+
+  if (visibleCount) visibleCount.textContent = String(count);
+  if (badgeCount) badgeCount.textContent = text;
+}
+
+function renderEmptyState(hasAnyStories) {
+  const emptyState = $("empty-state");
+  if (!emptyState) return;
+
+  const list = $("story-list");
+  if (!list) return;
+
+  if (hasAnyStories) {
+    emptyState.textContent = "没有找到相关内容。试试其他关键词，或成为第一个写下这段回忆的人。";
+    emptyState.classList.remove("hidden");
+  } else {
+    emptyState.textContent = "这里等待第一段真实的校园回忆。";
+    emptyState.classList.remove("hidden");
+  }
 }
 
 async function renderStories() {
   const list = $("story-list");
-  const q = $("search").value.trim().toLowerCase();
+  const searchInput = $("search");
+  if (!list) return;
 
-  list.innerHTML = "<p>正在加载回忆……</p>";
+  const keyword = (searchInput ? searchInput.value : "").trim().toLowerCase();
+  list.innerHTML = "<p class=\"empty\">正在加载回忆……</p>";
+
+  if (!db) {
+    list.innerHTML = '<p class="empty">当前无法连接数据库，暂时无法加载回忆。</p>';
+    updateStoryCount(0);
+    renderEmptyState(false);
+    return;
+  }
 
   const { data: stories, error } = await db
     .from("stories")
-    .select(
-      "id,title,content,plain_body,category,author_name,created_at,tags"
-    )
+    .select("id,title,content,plain_body,category,author_name,created_at,tags")
     .eq("status", "published")
     .order("created_at", { ascending: false });
 
   if (error) {
-    list.innerHTML =
-      '<p class="empty">暂时无法加载投稿，请稍后刷新页面。</p>';
-
+    list.innerHTML = '<p class="empty">暂时无法加载投稿，请稍后刷新页面。</p>';
     console.error("加载投稿失败：", error);
-    $("story-count").textContent = "暂时无法加载";
+    updateStoryCount(0);
+    renderEmptyState(false);
     return;
   }
 
-  const allStories = stories || [];
-
-  const filtered = allStories.filter((s) =>
-    `${s.title} ${s.plain_body || ""} ${s.category} ${s.tags || ""}`
-      .toLowerCase()
-      .includes(q)
-  );
+  const allStories = Array.isArray(stories) ? stories : [];
+  const filteredStories = allStories.filter((story) => {
+    const haystack = [
+      story.title || "",
+      story.plain_body || "",
+      story.category || "",
+      story.tags || "",
+      story.author_name || ""
+    ].join(" ").toLowerCase();
+    return haystack.includes(keyword);
+  });
 
   list.innerHTML = "";
 
-  filtered.forEach((s) => {
+  if (!filteredStories.length) {
+    list.innerHTML = "";
+    updateStoryCount(allStories.length);
+    renderEmptyState(allStories.length > 0);
+    return;
+  }
+
+  filteredStories.forEach((story) => {
     const card = document.createElement("article");
     card.className = "story-card";
 
@@ -185,102 +183,135 @@ async function renderStories() {
     meta.className = "story-meta";
 
     const category = document.createElement("span");
-    category.textContent = s.category || "其他";
+    category.textContent = story.category || "其他";
 
-    const label = document.createElement("span");
-    label.textContent = "校园回忆";
+    const tag = document.createElement("span");
+    tag.textContent = "校园回忆";
 
-    meta.append(category, label);
+    meta.append(category, tag);
 
     const heading = document.createElement("h3");
-    heading.textContent = s.title;
+    heading.textContent = story.title || "未命名的回忆";
 
-    const body = document.createElement("div");
-    body.className = "story-excerpt";
-    body.textContent = (
-      s.plain_body || plainText(s.content || "")
-    ).slice(0, 160);
+    const excerpt = document.createElement("div");
+    excerpt.className = "story-excerpt";
+    const rawText = story.plain_body || plainText(story.content || "");
+    excerpt.textContent = rawText.length > 160 ? `${rawText.slice(0, 160)}……` : rawText;
 
     const footer = document.createElement("div");
     footer.className = "story-footer";
 
     const author = document.createElement("span");
-    author.textContent = s.author_name || "匿名";
+    author.textContent = story.author_name || "匿名";
 
     const date = document.createElement("span");
-    date.textContent = formatDate(s.created_at);
+    date.textContent = formatDate(story.created_at);
 
     footer.append(author, date);
-    card.append(meta, heading, body, footer);
+    card.append(meta, heading, excerpt, footer);
     list.appendChild(card);
   });
 
-  if (!filtered.length) {
-    list.innerHTML = `<p class="empty">${
-      allStories.length
-        ? "没有找到相关内容。"
-        : "这里等待第一段真实的校园回忆。"
-    }</p>`;
-  }
-
-  $("story-count").textContent = `${allStories.length} 篇校园回忆`;
-  $("empty-state").classList.toggle("hidden", filtered.length > 0);
+  updateStoryCount(allStories.length);
+  const emptyState = $("empty-state");
+  if (emptyState) emptyState.classList.add("hidden");
 }
 
-$("search").addEventListener("input", renderStories);
+if (document.querySelectorAll(".toolbar button").length) {
+  document.querySelectorAll(".toolbar button").forEach((button) => {
+    button.addEventListener("click", () => {
+      editor.focus();
+      const cmd = button.dataset.cmd;
+      const value = button.dataset.value || null;
+      if (cmd === "formatBlock") {
+        document.execCommand(cmd, false, value);
+      } else {
+        document.execCommand(cmd, false, null);
+      }
+    });
+  });
+}
 
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
+$("preview-btn")?.addEventListener("click", () => {
+  const title = ( $("title").value || "").trim() || "未命名的回忆";
+  const previewContent = $("preview-content");
+  const category = $("category").value || "其他";
+  const byline = getByline();
+  const previewHtml = cleanRichText(editor.innerHTML) || "<p>正文预览会显示在这里。</p>";
 
-  const title = $("title").value.trim();
-  const content = cleanRichText(editor.innerHTML);
-  const body = plainText(content);
-  const category = $("category").value;
-  const tags = $("tags").value.trim();
+  previewContent.innerHTML = `
+    <h1>${safeText(title)}</h1>
+    <p class="preview-byline">${safeText(category)} · ${safeText(byline)}</p>
+    <div class="preview-body">${previewHtml}</div>
+  `;
 
-  if (!title || !body) {
-    $("submit-message").textContent = "请填写标题和正文后再提交。";
+  previewDialog.showModal();
+});
+
+$("close-preview")?.addEventListener("click", () => {
+  previewDialog.close();
+});
+
+previewDialog?.addEventListener("click", (event) => {
+  if (event.target === previewDialog) {
+    previewDialog.close();
+  }
+});
+
+if (searchInput = $("search")) {
+  searchInput.addEventListener("input", renderStories);
+}
+
+form?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!db) {
+    setSubmitMessage("当前页面未连接到 Supabase 数据库，无法提交。", "error");
+    console.error("Supabase 客户端未初始化，无法提交投稿。");
     return;
   }
 
-  if (title.length > 120 || body.length > 50000) {
-    $("submit-message").textContent = "标题或正文长度超出限制。";
+  const title = $("title").value.trim();
+  const content = cleanRichText(editor.innerHTML);
+  const plainBody = plainText(content);
+  const category = $("category").value;
+  const tags = $("tags").value.trim();
+
+  if (!title || !plainBody) {
+    setSubmitMessage("请填写标题和正文后再提交。", "error");
+    return;
+  }
+
+  if (title.length > 120 || plainBody.length > 50000) {
+    setSubmitMessage("标题或正文长度超出限制。", "error");
     return;
   }
 
   if (!$("consent").checked) {
-    $("submit-message").textContent = "请先确认投稿授权与隐私说明。";
+    setSubmitMessage("请先确认投稿授权与隐私说明。", "error");
     return;
   }
 
-  if (
-    selectByline.value === "penname" &&
-    !$("penname").value.trim()
-  ) {
-    $("submit-message").textContent = "请填写笔名，或选择匿名署名。";
+  if (selectByline.value === "penname" && !$("penname").value.trim()) {
+    setSubmitMessage("请填写笔名，或选择匿名署名。", "error");
     return;
   }
 
-  if (
-    selectByline.value === "realname" &&
-    !$("realname").value.trim()
-  ) {
-    $("submit-message").textContent =
-      "请填写你希望公开展示的姓名，或选择匿名/笔名。";
+  if (selectByline.value === "realname" && !$("realname").value.trim()) {
+    setSubmitMessage("请填写你希望公开展示的姓名，或选择匿名/笔名。", "error");
     return;
   }
 
-  const button = form.querySelector('[type="submit"]');
+  const submitButton = form.querySelector('[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
 
-  if (button) button.disabled = true;
-
-  $("submit-message").textContent = "正在提交……";
+  setSubmitMessage("正在提交……");
 
   try {
     const { error } = await db.from("stories").insert({
       title,
       content,
-      plain_body: body,
+      plain_body: plainBody,
       category,
       author_name: getByline(),
       tags,
@@ -290,27 +321,377 @@ form.addEventListener("submit", async (e) => {
 
     if (error) throw error;
 
-    $("submit-message").textContent =
-      "投稿成功！所有访问者都可以看到这篇回忆。";
-
+    setSubmitMessage("投稿成功！页面正在刷新回忆列表。", "success");
     $("draft-status").textContent = "已提交到共享数据库";
 
     form.reset();
     editor.innerHTML = "";
-
-    $("penname-wrap").classList.add("hidden");
-    $("realname-wrap").classList.add("hidden");
+    setBylineVisibility();
+    $("consent").checked = false;
 
     await renderStories();
   } catch (error) {
     console.error("提交投稿失败：", error);
-
-    $("submit-message").textContent =
-      `投稿未成功：${error.message || "请检查数据库配置后重试。"}`;
+    setSubmitMessage(`投稿未成功：${error?.message || "请检查数据库配置后重试。"}`, "error");
   } finally {
-    if (button) button.disabled = false;
+    if (submitButton) submitButton.disabled = false;
   }
 });
 
+setBylineVisibility();
 renderStories();
-```
+
+if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  document.documentElement.style.scrollBehavior = "auto";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
