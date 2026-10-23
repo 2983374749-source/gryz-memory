@@ -1,6 +1,6 @@
 
 /* 广饶一中琐记：Supabase 共享投稿 */
-const SUPABASE_URL = "https://zdxusouvqwwbrdjysuqa.supabase.co/rest/v1/";
+const SUPABASE_URL = "https://zdxusouvqwwbrdjysuqa.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_B7Xt3iQFp2xEnxJqAPZu9g_M727c1O9";
 
 const $ = (id) => document.getElementById(id);
@@ -9,7 +9,7 @@ const form = $("story-form");
 const selectByline = $("byline");
 const previewDialog = $("preview-dialog");
 
-const supabase = window.supabase.createClient(
+const db = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_PUBLISHABLE_KEY
 );
@@ -119,7 +119,7 @@ async function renderStories() {
 
   list.innerHTML = "<p>正在加载回忆……</p>";
 
-  const { data: stories, error } = await supabase
+  const { data: stories, error } = await db
     .from("stories")
     .select("id,title,content,plain_body,category,author_name,created_at,tags")
     .eq("status", "published")
@@ -225,7 +225,7 @@ form.addEventListener("submit", async (e) => {
   $("submit-message").textContent = "正在提交……";
 
   try {
-    const { error } = await supabase.from("stories").insert({
+    const { error } = await db.from("stories").insert({
       title,
       content,
       plain_body: plainBody,
