@@ -1,17 +1,21 @@
 /* 广饶一中琐记：Supabase 共享投稿 */
 const SUPABASE_URL = "https://zdxusouvqwwbrdjysuqa.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_B7Xt3iQFp2xEnxJqAPZu9g_M727c1O9";
+const LOCAL_STORIES_KEY = "gryz-memory-local-stories";
+const LOCAL_COMMENTS_KEY = "gryz-memory-local-comments";
 
 const $ = (id) => document.getElementById(id);
 const editor = $("body-editor");
 const form = $("story-form");
 const selectByline = $("byline");
 const previewDialog = $("preview-dialog");
+const storyDialog = $("story-dialog");
 const searchInput = $("search");
 const storyList = $("story-list");
 const storyCount = $("story-count");
 const storyCountBadge = $("story-count-badge");
 const submitMessage = $("submit-message");
+const editBodyEditor = $("edit-body-editor");
 
 let db = null;
 
@@ -19,6 +23,56 @@ if (window.supabase) {
   db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 } else {
   console.warn("Supabase 客户端未加载，页面将以静态模式展示，只能进行前端检查。请确保 CDN 脚本在 app.js 之前加载。 ");
+}
+
+function getLocalStories() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORIES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function setLocalStories(items) {
+  try {
+    localStorage.setItem(LOCAL_STORIES_KEY, JSON.stringify(items));
+  } catch {
+    // ignore quota issues
+  }
+}
+
+function getLocalComments() {
+  try {
+    const raw = localStorage.getItem(LOCAL_COMMENTS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function setLocalComments(items) {
+  try {
+    localStorage.setItem(LOCAL_COMMENTS_KEY, JSON.stringify(items));
+  } catch {
+    // ignore quota issues
+  }
+}
+
+function mergeStoriesWithLocal(allStories) {
+  const localStories = getLocalStories();
+  if (!localStories.length) return allStories;
+
+  const index = new Map();
+  allStories.forEach((story) => index.set(String(story.id), story));
+
+  localStories.forEach((story) => {
+    if (story && story.id) {
+      index.set(String(story.id), { ...index.get(String(story.id)), ...story });
+    }
+  });
+
+  return [...index.values()].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 
 function escapeHtml(value) {
@@ -116,6 +170,158 @@ function formatDate(value) {
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("zh-CN");
 }
 
+function persistLocalStoryChanges(story) {
+  if (!story || !story.id) return;
+  const localStories = getLocalStories();
+  const next = [...localStories.filter((item) => String(item.id) !== String(story.id)), story];
+  setLocalStories(next);
+}
+
+function renderCommentList(storyId) {
+  const commentListElm = $("comment-list");
+  if (!commentListElm) return;
+
+  const comments = getLocalComments()[storyId] || [];
+
+  if (!comments.length) {
+    commentListElm.innerHTML = '<p class="empty">还没有留言，赶快写下第一条回忆回应吧。</p>';
+    return;
+  }
+
+  commentListElm.innerHTML = comments
+    .slice()
+    .reverse()
+    .map((item) => `
+      <div class="comment-item">
+        <strong>${escapeHtml(item.author || "匿名")}</strong>
+        <time>${escapeHtml(item.created_at ? formatDate(item.created_at) : "刚刚")}</time>
+        <p>${escapeHtml(item.body || "")}</p>
+      </div>
+    `)
+    .join("");
+}
+
+function openStoryDialog(storyId) {
+  if (!storyDialog) return;
+
+  const allStories = mergeStoriesWithLocal(getLocalStories().length ? getLocalStories() : []);
+  const story = allStories.find((item) => String(item.id) === String(storyId));
+  if (!story) return;
+
+  $("edit-story-id").value = story.id;
+  $("edit-title").value = story.title || "";
+  $("edit-category").value = story.category || "其他";
+  $("edit-author").value = story.author_name || "";
+  $("edit-tags").value = story.tags || "";
+  editBodyEditor.innerHTML = story.content || story.plain_body || "";
+  renderCommentList(storyId);
+  storyDialog.showModal();
+}
+
+async function trySaveCommentToDb(storyId, author, body) {
+  if (!db) return false;
+
+  const tables = ["story_comments", "comments"];
+  for (const table of tables) {
+    try {
+      const { error } = await db.from(table).insert({
+        story_id: String(storyId),
+        author_name: author,
+        body,
+        created_at: new Date().toISOString()
+      });
+      if (!error) return true;
+    } catch {
+      // continue trying next table
+    }
+  }
+  return false;
+}
+
+async function addComment(storyId, author, body) {
+  const safeAuthor = (author || "匿名").trim() || "匿名";
+  const safeBody = (body || "").trim();
+  if (!safeBody) {
+    return false;
+  }
+
+  const item = {
+    author: safeAuthor,
+    body: safeBody,
+    created_at: new Date().toISOString()
+  };
+
+  const commentBank = getLocalComments();
+  const existing = commentBank[storyId] || [];
+  commentBank[storyId] = [...existing, item];
+  setLocalComments(commentBank);
+
+  const savedToDb = await trySaveCommentToDb(storyId, safeAuthor, safeBody);
+  if (!savedToDb) {
+    renderCommentList(storyId);
+    return true;
+  }
+
+  renderCommentList(storyId);
+  return true;
+}
+
+async function saveStoryEdit(event) {
+  event.preventDefault();
+  const storyId = $("edit-story-id").value;
+  if (!storyId) return;
+
+  const nextTitle = $("edit-title").value.trim();
+  const nextContent = cleanRichText(editBodyEditor.innerHTML);
+  const nextPlainBody = plainText(nextContent);
+  const nextCategory = $("edit-category").value;
+  const nextAuthor = $("edit-author").value.trim() || "匿名";
+  const nextTags = $("edit-tags").value.trim();
+
+  if (!nextTitle || !nextPlainBody) {
+    setSubmitMessage("编辑时标题和正文不能为空。", "error");
+    return;
+  }
+
+  const updatedStory = {
+    id: Number(storyId),
+    title: nextTitle,
+    content: nextContent,
+    plain_body: nextPlainBody,
+    category: nextCategory,
+    author_name: nextAuthor,
+    tags: nextTags,
+    status: "published",
+    created_at: new Date().toISOString()
+  };
+
+  persistLocalStoryChanges(updatedStory);
+
+  if (db) {
+    try {
+      const { error } = await db.from("stories").update({
+        title: nextTitle,
+        content: nextContent,
+        plain_body: nextPlainBody,
+        category: nextCategory,
+        author_name: nextAuthor,
+        tags: nextTags,
+        updated_at: new Date().toISOString()
+      }).eq("id", Number(storyId));
+
+      if (!error) {
+        setSubmitMessage("回忆已更新。", "success");
+      }
+    } catch (err) {
+      console.warn("数据库更新失败，已保留本地修改。", err);
+      setSubmitMessage("已保存本地修改，但数据库同步失败。", "success");
+    }
+  }
+
+  await renderStories();
+  storyDialog.close();
+}
+
 async function renderStories() {
   if (!storyList) return;
 
@@ -123,9 +329,66 @@ async function renderStories() {
   storyList.innerHTML = '<p class="empty">正在加载回忆……</p>';
 
   if (!db) {
-    storyList.innerHTML = '<p class="empty">当前无法连接数据库，暂时无法加载回忆。</p>';
-    updateStoryCount(0);
-    showEmptyState(false);
+    const localStories = mergeStoriesWithLocal(getLocalStories());
+    const filtered = localStories.filter((story) => {
+      const haystack = [story.title, story.plain_body || story.content, story.category, story.tags, story.author_name].join(" ").toLowerCase();
+      return haystack.includes(keyword);
+    });
+
+    storyList.innerHTML = "";
+    if (!filtered.length) {
+      updateStoryCount(localStories.length);
+      showEmptyState(localStories.length > 0);
+      return;
+    }
+
+    filtered.forEach((story) => {
+      const card = document.createElement("article");
+      card.className = "story-card";
+      const meta = document.createElement("div");
+      meta.className = "story-meta";
+      const category = document.createElement("span");
+      category.textContent = story.category || "其他";
+      const tag = document.createElement("span");
+      tag.textContent = "校园回忆";
+      meta.append(category, tag);
+
+      const heading = document.createElement("h3");
+      heading.textContent = story.title || "未命名的回忆";
+
+      const excerpt = document.createElement("div");
+      excerpt.className = "story-excerpt";
+      const rawText = story.plain_body || story.content || "";
+      excerpt.textContent = rawText.length > 160 ? `${rawText.slice(0, 160)}……` : rawText;
+
+      const footer = document.createElement("div");
+      footer.className = "story-footer";
+      const author = document.createElement("span");
+      author.textContent = story.author_name || "匿名";
+      const date = document.createElement("span");
+      date.textContent = formatDate(story.created_at);
+      const actions = document.createElement("div");
+      actions.className = "story-actions";
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "inline-button";
+      editBtn.textContent = "编辑";
+      editBtn.addEventListener("click", () => openStoryDialog(story.id));
+      const commentBtn = document.createElement("button");
+      commentBtn.type = "button";
+      commentBtn.className = "inline-button";
+      commentBtn.textContent = "评论";
+      commentBtn.addEventListener("click", () => openStoryDialog(story.id));
+      actions.append(editBtn, commentBtn);
+
+      footer.append(author, date);
+      card.append(meta, heading, excerpt, footer, actions);
+      storyList.appendChild(card);
+    });
+
+    updateStoryCount(localStories.length);
+    const emptyState = $("empty-state");
+    if (emptyState) emptyState.classList.add("hidden");
     return;
   }
 
@@ -138,11 +401,11 @@ async function renderStories() {
 
     if (error) throw error;
 
-    const allStories = Array.isArray(stories) ? stories : [];
+    const allStories = mergeStoriesWithLocal(Array.isArray(stories) ? stories : []);
     const filteredStories = allStories.filter((story) => {
       const haystack = [
         story.title || "",
-        story.plain_body || "",
+        story.plain_body || story.content || "",
         story.category || "",
         story.tags || "",
         story.author_name || ""
@@ -161,13 +424,10 @@ async function renderStories() {
     filteredStories.forEach((story) => {
       const card = document.createElement("article");
       card.className = "story-card";
-
       const meta = document.createElement("div");
       meta.className = "story-meta";
-
       const category = document.createElement("span");
       category.textContent = story.category || "其他";
-
       const tag = document.createElement("span");
       tag.textContent = "校园回忆";
       meta.append(category, tag);
@@ -177,20 +437,33 @@ async function renderStories() {
 
       const excerpt = document.createElement("div");
       excerpt.className = "story-excerpt";
-      const rawText = story.plain_body || plainText(story.content || "");
+      const rawText = story.plain_body || story.content || "";
       excerpt.textContent = rawText.length > 160 ? `${rawText.slice(0, 160)}……` : rawText;
 
       const footer = document.createElement("div");
       footer.className = "story-footer";
-
       const author = document.createElement("span");
       author.textContent = story.author_name || "匿名";
-
       const date = document.createElement("span");
       date.textContent = formatDate(story.created_at);
 
+      const actions = document.createElement("div");
+      actions.className = "story-actions";
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "inline-button";
+      editBtn.textContent = "编辑";
+      editBtn.addEventListener("click", () => openStoryDialog(story.id));
+
+      const commentBtn = document.createElement("button");
+      commentBtn.type = "button";
+      commentBtn.className = "inline-button";
+      commentBtn.textContent = "评论";
+      commentBtn.addEventListener("click", () => openStoryDialog(story.id));
+
+      actions.append(editBtn, commentBtn);
       footer.append(author, date);
-      card.append(meta, heading, excerpt, footer);
+      card.append(meta, heading, excerpt, footer, actions);
       storyList.appendChild(card);
     });
 
@@ -249,6 +522,34 @@ previewDialog?.addEventListener("click", (event) => {
   if (event.target === previewDialog) previewDialog.close();
 });
 
+$("close-story-dialog")?.addEventListener("click", () => {
+  if (storyDialog) storyDialog.close();
+});
+
+storyDialog?.addEventListener("click", (event) => {
+  if (event.target === storyDialog) storyDialog.close();
+});
+
+$("cancel-edit-btn")?.addEventListener("click", () => {
+  if (storyDialog) storyDialog.close();
+});
+
+$("story-edit-form")?.addEventListener("submit", saveStoryEdit);
+
+$("comment-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const storyId = $("edit-story-id").value;
+  const author = $("comment-author").value.trim();
+  const body = $("comment-body").value.trim();
+
+  if (!storyId) return;
+  const ok = await addComment(storyId, author, body);
+  if (ok) {
+    $("comment-author").value = "";
+    $("comment-body").value = "";
+  }
+});
+
 if (searchInput) {
   searchInput.addEventListener("input", renderStories);
 }
@@ -299,7 +600,7 @@ form?.addEventListener("submit", async (event) => {
   setSubmitMessage("正在提交……");
 
   try {
-    const { error } = await db.from("stories").insert({
+    const { data, error } = await db.from("stories").insert({
       title,
       content,
       plain_body: plainBody,
@@ -308,9 +609,14 @@ form?.addEventListener("submit", async (event) => {
       tags,
       status: "published",
       report_count: 0
-    });
+    }).select();
 
     if (error) throw error;
+
+    const createdStory = Array.isArray(data) && data[0] ? data[0] : null;
+    if (createdStory) {
+      persistLocalStoryChanges(createdStory);
+    }
 
     setSubmitMessage("投稿成功！页面正在刷新回忆列表。", "success");
 

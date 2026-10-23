@@ -208,6 +208,64 @@
     <article id="preview-content" class="preview-content"></article>
   </dialog>
 
+  <dialog id="story-dialog">
+    <div class="preview-head">
+      <span>回忆详情与留言</span>
+      <button id="close-story-dialog" type="button" aria-label="关闭详情">×</button>
+    </div>
+    <div class="story-dialog-body">
+      <form id="story-edit-form" class="story-edit-form">
+        <input id="edit-story-id" type="hidden">
+        <label for="edit-title">标题</label>
+        <input id="edit-title" maxlength="100">
+
+        <div class="field-row two-col">
+          <div>
+            <label for="edit-category">分类</label>
+            <select id="edit-category">
+              <option>校园日常</option>
+              <option>师生记忆</option>
+              <option>同学情谊</option>
+              <option>社团与活动</option>
+              <option>校园风景</option>
+              <option>其他</option>
+            </select>
+          </div>
+          <div>
+            <label for="edit-author">署名</label>
+            <input id="edit-author" maxlength="80">
+          </div>
+        </div>
+
+        <label for="edit-tags">关键词</label>
+        <input id="edit-tags" maxlength="120">
+
+        <label>正文</label>
+        <div id="edit-body-editor" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="编辑正文"></div>
+
+        <div class="edit-actions">
+          <button class="button primary" type="submit">保存修改</button>
+          <button class="button secondary" type="button" id="cancel-edit-btn">取消</button>
+        </div>
+      </form>
+
+      <div class="comments-panel">
+        <h3>留言</h3>
+        <div id="comment-list" class="comment-list"></div>
+
+        <form id="comment-form" class="comment-form">
+          <label for="comment-author">昵称</label>
+          <input id="comment-author" maxlength="40" placeholder="例如：校友A">
+
+          <label for="comment-body">留言内容</label>
+          <textarea id="comment-body" rows="4" maxlength="500" placeholder="写下你的回应或补充说明"></textarea>
+
+          <button class="button primary" type="submit">发布留言</button>
+        </form>
+      </div>
+    </div>
+  </dialog>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
 </body>
