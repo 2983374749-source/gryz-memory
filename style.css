@@ -40,9 +40,7 @@ button, input, select {
   font: inherit;
 }
 
-button {
-  cursor: pointer;
-}
+button { cursor: pointer; }
 
 main, footer, .topbar {
   max-width: 1220px;
@@ -471,7 +469,7 @@ h1 em {
 .editor-label {
   color: var(--green-deep);
   font-weight: 700;
-	display: inline-flex;
+  display: inline-flex;
   align-items: center;
 }
 
@@ -755,18 +753,13 @@ footer a {
 @media (max-width: 900px) {
   .hero,
   .contribute-section,
-  .section,
-  .how-grid,
-  .story-grid {
+  .story-grid,
+  .how-grid {
     grid-template-columns: 1fr;
   }
 
   .hero {
     padding-top: 24px;
-  }
-
-  .story-grid {
-    display: grid;
   }
 }
 
